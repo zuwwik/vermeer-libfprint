@@ -58,6 +58,7 @@ static gboolean interactive (FpiDeviceGoodixVermeer *self, gboolean enroll,
     struct vfp_sample sample = {0};
     if (!vermeer_illumination_wait (self->ui, TRUE, cancellable, deadline, error)) goto out;
     status = vfp_sample (self->native, &sample, cancelled, cancellable);
+    vermeer_illumination_sample_done (self->ui);
     fp_dbg ("%s sample status=%d remaining=%u", enroll ? "Enrollment" : "Authentication", status, status ? 0 : sample.remaining);
     if (sample.cleanup_failed) { g_propagate_error (error, native_error (status)); goto out; }
     if (!enroll && (status == 0 || status == 1008 || status == 1141)) {
@@ -95,6 +96,7 @@ static void worker (GTask *task, gpointer object, gpointer task_data, GCancellab
 {
   FpiDeviceGoodixVermeer *self = object;
   struct work *work = task_data;
+  fp_dbg ("Native worker=%p operation=%u", (void *) g_thread_self (), work->operation);
   g_autoptr(GError) error = NULL;
   int status = 0;
   struct result *result = NULL;

@@ -30,7 +30,10 @@ are not included here.
 Live fprintd pilot tests have passed enrollment, matching, rejection and
 cancellation. The Nura target build passes six enabled tests, including the
 illumination interface tests. Tests for unrelated disabled drivers are skipped.
-Persistent installation and locked-session integration remain in validation.
+The native KDE frontend is installed on the test phone. With the corrected
+backend reset/wakeup sequence, three consecutive lock-screen sessions matched
+on their first capture; an unregistered finger was rejected. Long-term
+reliability and false-accept/false-reject rates remain unmeasured.
 
 
 

@@ -14,6 +14,10 @@ static const char xml[] =
   "<node><interface name='" INTERFACE "'>"
   "<method name='Contact'><arg type='t' direction='in'/><arg type='b' direction='in'/></method>"
   "<signal name='TargetRequested'><arg type='t'/><arg type='b'/></signal>"
+  "<signal name='ScanComplete'><arg type='t'/></signal>"
+  "<property name='ActiveGeneration' type='t' access='read'>"
+  "<annotation name='org.freedesktop.DBus.Property.EmitsChangedSignal' value='false'/>"
+  "</property>"
   "</interface></node>";
 /* Only a user with an active local graphical session may report contact.
  * User-service processes need not belong to the session scope themselves.
@@ -90,7 +94,22 @@ static void method_call (GDBusConnection *bus, const gchar *sender,
   else g_async_queue_push (ui->contacts, contact);
   g_dbus_method_invocation_return_value (invocation, NULL);
 }
-static const GDBusInterfaceVTable vtable = { .method_call = method_call };
+static GVariant *get_property (GDBusConnection *bus, const gchar *sender,
+                               const gchar *path, const gchar *interface,
+                               const gchar *property, GError **error, gpointer data)
+{
+  (void)bus; (void)sender; (void)path; (void)interface;
+  VermeerIllumination *ui = data;
+  if (!g_str_equal (property, "ActiveGeneration")) {
+    g_set_error_literal (error, G_DBUS_ERROR, G_DBUS_ERROR_UNKNOWN_PROPERTY, "Unknown property");
+    return NULL;
+  }
+  g_mutex_lock (&ui->lock);
+  guint64 generation = ui->generation;
+  g_mutex_unlock (&ui->lock);
+  return g_variant_new_uint64 (generation);
+}
+static const GDBusInterfaceVTable vtable = { .method_call = method_call, .get_property = get_property };
 VermeerIllumination *vermeer_illumination_new (GError **error)
 {
   g_autoptr(GDBusNodeInfo) info = g_dbus_node_info_new_for_xml (xml, error);
@@ -113,19 +132,35 @@ void vermeer_illumination_free (VermeerIllumination *ui)
   g_mutex_clear (&ui->lock);
   g_free (ui);
 }
-struct notification { GDBusConnection *bus; guint64 generation; gboolean show; };
+struct notification { GDBusConnection *bus; guint64 generation; gboolean show, sample_done; };
 static gboolean notify_main (gpointer data)
 {
   struct notification *notification = data;
-  g_dbus_connection_emit_signal (notification->bus, NULL, OBJECT_PATH, INTERFACE,
-      "TargetRequested", g_variant_new ("(tb)", notification->generation, notification->show), NULL);
+  if (notification->sample_done)
+    g_dbus_connection_emit_signal (notification->bus, NULL, OBJECT_PATH, INTERFACE,
+        "ScanComplete", g_variant_new ("(t)", notification->generation), NULL);
+  else
+    g_dbus_connection_emit_signal (notification->bus, NULL, OBJECT_PATH, INTERFACE,
+        "TargetRequested", g_variant_new ("(tb)", notification->generation, notification->show), NULL);
   g_object_unref (notification->bus); g_free (notification);
   return G_SOURCE_REMOVE;
 }
 static void notify (VermeerIllumination *ui, guint64 generation, gboolean show)
 {
   struct notification *notification = g_new (struct notification, 1);
-  *notification = (struct notification){ g_object_ref (ui->bus), generation, show };
+  *notification = (struct notification){ .bus = g_object_ref (ui->bus),
+                                         .generation = generation, .show = show };
+  g_main_context_invoke (NULL, notify_main, notification);
+}
+void vermeer_illumination_sample_done (VermeerIllumination *ui)
+{
+  g_mutex_lock (&ui->lock);
+  guint64 generation = ui->generation;
+  g_mutex_unlock (&ui->lock);
+  if (!generation) return;
+  struct notification *notification = g_new0 (struct notification, 1);
+  *notification = (struct notification){ .bus = g_object_ref (ui->bus),
+                                         .generation = generation, .sample_done = TRUE };
   g_main_context_invoke (NULL, notify_main, notification);
 }
 void vermeer_illumination_begin (VermeerIllumination *ui)

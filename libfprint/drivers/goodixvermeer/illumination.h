@@ -5,6 +5,7 @@ typedef struct _VermeerIllumination VermeerIllumination;
 VermeerIllumination *vermeer_illumination_new (GError **error);
 void vermeer_illumination_free (VermeerIllumination *ui);
 void vermeer_illumination_begin (VermeerIllumination *ui);
+void vermeer_illumination_sample_done (VermeerIllumination *ui);
 void vermeer_illumination_end (VermeerIllumination *ui);
 gboolean vermeer_illumination_wait (VermeerIllumination *ui, gboolean present,
                                    GCancellable *cancellable, gint64 deadline,

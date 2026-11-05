@@ -86,6 +86,36 @@ static void contact_call (GDBusConnection *client, VermeerIllumination *ui,
   else g_assert_error (call.error, G_DBUS_ERROR, G_DBUS_ERROR_ACCESS_DENIED);
   g_clear_error (&call.error);
 }
+struct snapshot_result { gboolean done; guint64 generation; };
+static void snapshot_done (GObject *object, GAsyncResult *result, gpointer data)
+{
+  struct snapshot_result *snapshot = data;
+  g_autoptr(GError) error = NULL;
+  g_autoptr(GVariant) reply = g_dbus_connection_call_finish (G_DBUS_CONNECTION (object), result, &error);
+  g_assert_no_error (error);
+  g_autoptr(GVariant) value = NULL;
+  g_variant_get (reply, "(v)", &value);
+  snapshot->generation = g_variant_get_uint64 (value);
+  snapshot->done = TRUE;
+}
+static void assert_snapshot (GDBusConnection *client, VermeerIllumination *ui, guint64 expected)
+{
+  struct snapshot_result snapshot = {};
+  g_dbus_connection_call (client, g_dbus_connection_get_unique_name (ui->bus), OBJECT_PATH,
+      "org.freedesktop.DBus.Properties", "Get", g_variant_new ("(ss)", INTERFACE, "ActiveGeneration"),
+      G_VARIANT_TYPE ("(v)"), 0, 1000, NULL, snapshot_done, &snapshot);
+  while (!snapshot.done) g_main_context_iteration (NULL, TRUE);
+  g_assert_cmpuint (snapshot.generation, ==, expected);
+}
+static guint scan_events;
+static guint64 scan_generation;
+static void scan_signal (GDBusConnection *bus, const char *sender, const char *path,
+                         const char *interface, const char *signal, GVariant *params, gpointer data)
+{
+  (void)bus; (void)sender; (void)path; (void)interface; (void)signal; (void)data;
+  g_variant_get (params, "(t)", &scan_generation); scan_events++;
+}
+static gboolean signal_timeout (gpointer data) { *(gboolean *)data = TRUE; return G_SOURCE_REMOVE; }
 int main (int argc, char **argv)
 {
   g_test_init (&argc, &argv, NULL);
@@ -104,13 +134,26 @@ int main (int argc, char **argv)
       G_DBUS_CONNECTION_FLAGS_AUTHENTICATION_CLIENT | G_DBUS_CONNECTION_FLAGS_MESSAGE_BUS_CONNECTION,
       NULL, NULL, &error);
   g_assert_no_error (error);
+  assert_snapshot (client, ui, 0);
   contact_call (client, ui, 123, TRUE, FALSE);
   vermeer_illumination_begin (ui);
   guint64 generation = ui->generation;
+  assert_snapshot (client, ui, generation);
   contact_call (client, ui, generation, TRUE, TRUE);
   g_autoptr(GCancellable) cancellable = g_cancellable_new ();
   g_assert_true (vermeer_illumination_wait (ui, TRUE, cancellable,
       g_get_monotonic_time () + G_TIME_SPAN_SECOND, &error)); g_assert_no_error (error);
+  guint subscription = g_dbus_connection_signal_subscribe (client,
+      g_dbus_connection_get_unique_name (ui->bus), INTERFACE, "ScanComplete", OBJECT_PATH,
+      NULL, G_DBUS_SIGNAL_FLAGS_NONE, scan_signal, NULL, NULL);
+  vermeer_illumination_sample_done (ui);
+  gboolean timed_out = FALSE;
+  guint timer = g_timeout_add (1000, signal_timeout, &timed_out);
+  while (!scan_events && !timed_out) g_main_context_iteration (NULL, TRUE);
+  if (!timed_out) g_source_remove (timer);
+  g_assert_cmpuint (scan_events, ==, 1); g_assert_cmpuint (scan_generation, ==, generation);
+  g_assert_cmpuint (ui->generation, ==, generation);
+  g_dbus_connection_signal_unsubscribe (client, subscription);
   g_atomic_int_set (&active, 0); contact_call (client, ui, generation, TRUE, FALSE);
   g_atomic_int_set (&active, 1); g_atomic_int_set (&remote, 1);
   contact_call (client, ui, generation, TRUE, FALSE);
@@ -126,6 +169,7 @@ int main (int argc, char **argv)
       g_get_monotonic_time () + G_TIME_SPAN_SECOND, &error));
   g_assert_error (error, G_IO_ERROR, G_IO_ERROR_CANCELLED); g_clear_error (&error);
   vermeer_illumination_end (ui);
+  assert_snapshot (client, ui, 0);
   contact_call (client, ui, generation, FALSE, TRUE);
   contact_call (client, ui, generation, TRUE, FALSE);
   vermeer_illumination_free (ui);
