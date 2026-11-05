@@ -37,9 +37,7 @@
   "      The fprint project aims to support for consumer fingerprint reader devices.\n" \
   "    </p>\n" \
   "  </description>\n" \
-  "  <provides>\n" \
-  "%s\n" \
-  "  </provides>\n" \
+  "%s" \
   "</component>\n"
 
 static int
@@ -93,6 +91,9 @@ main (void)
       usb_driver_devices_append (devices_list, cls);
     }
 
+  if (devices_list->len)
+    g_string_append (provided_modules, "  <provides>\n");
+
   for (guint i = 0; i < devices_list->len; ++i)
     {
       const char *device_id = g_ptr_array_index (devices_list, i);
@@ -104,6 +105,9 @@ main (void)
       if (i < devices_list->len - 1)
         g_string_append_c (provided_modules, '\n');
     }
+
+  if (devices_list->len)
+    g_string_append (provided_modules, "\n  </provides>\n");
 
   g_print (METAINFO_BASE, provided_modules->str);
 }
