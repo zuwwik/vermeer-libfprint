@@ -12,6 +12,13 @@ group/finger reference, and identification is checked against the provided
 libfprint gallery. Enrollment is authorized by normal fprintd policy and the
 root-only native backend.
 
+The backend and KDE target are maintained in
+[vermeer-fingerprint](https://github.com/zuwwik/vermeer-fingerprint), with the
+filesystem listener in
+[vermeer-qtee-supplicant](https://github.com/zuwwik/vermeer-qtee-supplicant).
+Kernel changes are on
+[vermeer-mainline's fingerprint-vermeer branch](https://github.com/zuwwik/vermeer-mainline/tree/fingerprint-vermeer).
+
 Build the backend first and expose its pkg-config file, then configure:
 
 ```sh
