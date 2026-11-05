@@ -134,6 +134,10 @@ driver_sources = {
         'drivers/goodixmoc/goodix.c',
         'drivers/goodixmoc/goodix_proto.c',
     ),
+    'goodixvermeer' : files(
+        'drivers/goodixvermeer/goodixvermeer.c',
+        'drivers/goodixvermeer/illumination.c',
+    ),
     'goodixqsee' : files(
         'drivers/goodixqsee/goodix-qsee.c',
         'drivers/goodixqsee/goodix-qsee-proto.c',
@@ -155,6 +159,7 @@ helper_sources = {
     'openssl': files(),
     'pixman': files(),
     'udev': files(),
+    'vermeer': files(),
     'virtual': files('drivers/virtual-device-listener.c'),
 }
 

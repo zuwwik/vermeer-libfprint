@@ -1,3 +1,37 @@
+## Vermeer native Linux driver
+
+This development fork starts from `430e24e` of the Goodix QSEE reference fork,
+which supplies misc-device discovery to libfprint. The new `goodixvermeer`
+driver has a separate protocol implementation: it uses the native Linux QTEE
+backend in `../vermeer-fingerprint`. It does not use the reference sensor's
+command layout, Android HAL libraries or hardware-auth-token provider.
+
+The driver binds `goodix_fp` with DT compatible `xiaomi,vermeer-fingerprint`.
+Matching stays inside the signed Vermeer TA. libfprint prints contain a Linux
+group/finger reference, and identification is checked against the provided
+libfprint gallery. Enrollment is authorized by normal fprintd policy and the
+root-only native backend.
+
+Build the backend first and expose its pkg-config file, then configure:
+
+```sh
+PKG_CONFIG_PATH=/path/to/native/lib/pkgconfig meson setup build \
+  -Ddrivers=goodixvermeer -Ddoc=false -Dintrospection=false
+meson compile -C build
+meson test -C build --print-errorlogs
+```
+
+A native session component must render the optical target and report stable
+contact through the illumination interface. See the backend repository's
+README and packaging directory for the KDE component and filesystem listener.
+Firmware and per-phone factory calibration are private runtime inputs; they
+are not included here.
+
+Live fprintd pilot tests have passed enrollment, matching, rejection and
+cancellation. The Nura target build passes six enabled tests, including the
+illumination interface tests. Tests for unrelated disabled drivers are skipped.
+Persistent installation and locked-session integration remain in validation.
+
 
 
 <div align="center">

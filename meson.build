@@ -142,6 +142,7 @@ drivers_info = {
     'upekts': {},
     'goodixmoc': {},
     'goodixqsee': { 'helper': ['udev'] },
+    'goodixvermeer': { 'helper': ['udev', 'vermeer'] },
     'nb1010': {},
     'fpcmoc': {},
     'realtek': {},
@@ -244,6 +245,8 @@ foreach i : driver_helpers
         endif
 
         optional_deps += openssl_dep
+    elif i == 'vermeer'
+        optional_deps += dependency('vermeer-fingerprint', version: '>= 0.1')
     elif i == 'udev'
         install_udev_rules = true
 
